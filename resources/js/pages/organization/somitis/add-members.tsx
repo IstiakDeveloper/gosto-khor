@@ -1,33 +1,41 @@
 import React, { useState } from 'react';
-import { Head, useForm, Link } from '@inertiajs/react';
+import { Head, Link, useForm } from '@inertiajs/react';
 import OrganizationLayout from '@/layouts/organization-layout';
-import { Member, Somiti } from '@/types';
+import InputError from '@/components/input-error';
+import InputLabel from '@/components/input-label';
+import TextInput from '@/components/text-input';
+import PrimaryButton from '@/components/primary-button';
+import SecondaryButton from '@/components/secondary-button';
+import { Somiti, Member } from '@/types';
 
-interface AddMembersProps {
+interface SomitiAddMembersProps {
   somiti: Somiti;
   availableMembers: Member[];
 }
 
-const AddMembers: React.FC<AddMembersProps> = ({ somiti, availableMembers }) => {
+const SomitiAddMembers: React.FC<SomitiAddMembersProps> = ({ somiti, availableMembers }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedMembers, setSelectedMembers] = useState<number[]>([]);
+  const [selectedMemberIds, setSelectedMemberIds] = useState<number[]>([]);
 
   const { data, setData, post, processing, errors } = useForm({
     member_ids: [] as number[],
+    join_date: new Date().toISOString().split('T')[0], // Default to today's date
   });
 
-  const filteredMembers = availableMembers.filter(member =>
-    member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    member.phone.includes(searchTerm)
-  );
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value.toLowerCase());
+  };
 
-  const toggleMember = (memberId: number) => {
-    const newSelectedMembers = selectedMembers.includes(memberId)
-      ? selectedMembers.filter(id => id !== memberId)
-      : [...selectedMembers, memberId];
-
-    setSelectedMembers(newSelectedMembers);
-    setData('member_ids', newSelectedMembers);
+  const toggleMemberSelection = (memberId: number) => {
+    if (selectedMemberIds.includes(memberId)) {
+      // Remove member from selection
+      setSelectedMemberIds(selectedMemberIds.filter((id) => id !== memberId));
+      setData('member_ids', data.member_ids.filter((id) => id !== memberId));
+    } else {
+      // Add member to selection
+      setSelectedMemberIds([...selectedMemberIds, memberId]);
+      setData('member_ids', [...data.member_ids, memberId]);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -35,142 +43,104 @@ const AddMembers: React.FC<AddMembersProps> = ({ somiti, availableMembers }) => 
     post(`/organization/somitis/${somiti.id}/add-members`);
   };
 
-  const selectAll = () => {
-    const allIds = filteredMembers.map(member => member.id);
-    setSelectedMembers(allIds);
-    setData('member_ids', allIds);
+  const handleCancel = () => {
+    window.history.back();
   };
 
-  const deselectAll = () => {
-    setSelectedMembers([]);
-    setData('member_ids', []);
-  };
+  // Filter members based on search term
+  const filteredMembers = searchTerm
+    ? availableMembers.filter(
+        (member) =>
+          member.name.toLowerCase().includes(searchTerm) ||
+          member.phone.toLowerCase().includes(searchTerm) ||
+          (member.email && member.email.toLowerCase().includes(searchTerm))
+      )
+    : availableMembers;
 
   return (
-    <OrganizationLayout title={`সদস্য যোগ করুন: ${somiti.name}`}>
-      <Head title={`সদস্য যোগ করুন: ${somiti.name}`} />
+    <OrganizationLayout title={`${somiti.name} - নতুন সদস্য যোগ করুন`}>
+      <Head title={`${somiti.name} - নতুন সদস্য যোগ করুন`} />
 
-      <div className="mb-6">
-        <Link
-          href={`/organization/somitis/${somiti.id}/members`}
-          className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md font-semibold text-xs text-gray-700 uppercase tracking-widest shadow-sm hover:text-gray-500 focus:outline-none focus:border-blue-300 focus:ring focus:ring-blue-200 active:text-gray-800 active:bg-gray-50 transition"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-          </svg>
-          সদস্য তালিকায় ফিরে যান
-        </Link>
-      </div>
-
-      <div className="bg-white p-6 rounded-lg shadow-md">
+      <div className="py-6">
+        {/* Header */}
         <div className="mb-6">
-          <h2 className="text-lg font-medium text-gray-900">
-            {somiti.name} - সদস্য যোগ করুন
+          <Link
+            href={`/organization/somitis/${somiti.id}/members`}
+            className="text-red-600 hover:text-red-800 flex items-center text-sm"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            সদস্য তালিকায় ফিরে যান
+          </Link>
+          <h2 className="text-2xl font-semibold text-gray-800 mt-1">
+            {somiti.name} - নতুন সদস্য যোগ করুন
           </h2>
-          <p className="mt-1 text-sm text-gray-600">
-            যে সমস্ত সদস্যদের সমিতিতে যোগ করতে চান তাদের নির্বাচন করুন।
-          </p>
         </div>
 
-        <div className="mb-6">
-          <div className="flex flex-col md:flex-row md:items-center gap-4">
-            <div className="w-full md:w-1/2">
-              <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-1">
-                সদস্য খুঁজুন
-              </label>
-              <input
-                id="search"
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="নাম বা ফোন নম্বর দিয়ে খুঁজুন"
-                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500 sm:text-sm"
-              />
-            </div>
-
-            <div className="w-full md:w-1/2 flex justify-end items-end space-x-2">
-              <button
-                type="button"
-                onClick={selectAll}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                disabled={filteredMembers.length === 0}
-              >
-                সব নির্বাচন করুন
-              </button>
-              <button
-                type="button"
-                onClick={deselectAll}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                disabled={selectedMembers.length === 0}
-              >
-                সব বাতিল করুন
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {errors.member_ids && (
-          <div className="mb-6 bg-red-50 border-l-4 border-red-400 p-4">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <p className="text-sm text-red-700">
-                  {errors.member_ids}
+        {/* Main Content */}
+        <div className="bg-white shadow-md rounded-lg overflow-hidden">
+          <div className="p-6">
+            <form onSubmit={handleSubmit}>
+              <div className="mb-6">
+                <InputLabel htmlFor="join_date" value="যোগদানের তারিখ" />
+                <TextInput
+                  id="join_date"
+                  type="date"
+                  className="mt-1 block w-full sm:w-1/3"
+                  value={data.join_date}
+                  onChange={(e) => setData('join_date', e.target.value)}
+                  required
+                />
+                <p className="mt-1 text-sm text-gray-500">
+                  এই তারিখ থেকে সদস্যের বকেয়া হিসাব করা হবে।
                 </p>
+                <InputError message={errors.join_date} className="mt-2" />
               </div>
-            </div>
-          </div>
-        )}
 
-        <form onSubmit={handleSubmit}>
-          <div className="border rounded-md overflow-hidden">
-            <div className="max-h-96 overflow-y-auto">
-              {filteredMembers.length === 0 ? (
-                <div className="p-6 text-center text-gray-500">
-                  {searchTerm ? 'কোন সদস্য পাওয়া যায়নি' : 'সমস্ত সদস্য ইতিমধ্যে এই সমিতিতে যোগ করা হয়েছে'}
+              <div className="mb-6">
+                <InputLabel htmlFor="search" value="সদস্য খুঁজুন" />
+                <TextInput
+                  id="search"
+                  type="text"
+                  className="mt-1 block w-full"
+                  placeholder="নাম, ফোন নম্বর বা ইমেইল দিয়ে খুঁজুন"
+                  value={searchTerm}
+                  onChange={handleSearchChange}
+                />
+              </div>
+
+              <div className="mb-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="font-medium text-gray-700">উপলব্ধ সদস্য ({filteredMembers.length})</h3>
+                  <p className="text-sm text-gray-500">
+                    {selectedMemberIds.length} জন সদস্য নির্বাচিত
+                  </p>
+                </div>
+                <InputError message={errors.member_ids} className="mt-2" />
+              </div>
+
+              {availableMembers.length === 0 ? (
+                <div className="bg-gray-50 p-4 rounded-md text-gray-500 text-center">
+                  কোন সদস্য পাওয়া যায়নি। সদস্য যোগ করতে হলে আগে সদস্য তৈরি করুন।
+                </div>
+              ) : filteredMembers.length === 0 ? (
+                <div className="bg-gray-50 p-4 rounded-md text-gray-500 text-center">
+                  আপনার অনুসন্ধানের সাথে মিলে এমন কোন সদস্য পাওয়া যায়নি।
                 </div>
               ) : (
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50 sticky top-0">
-                    <tr>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-10">
-                        <span className="sr-only">নির্বাচন করুন</span>
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        নাম
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        ফোন
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        ঠিকানা
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
+                <div className="border border-gray-200 rounded-md overflow-hidden max-h-96 overflow-y-auto">
+                  <ul className="divide-y divide-gray-200">
                     {filteredMembers.map((member) => (
-                      <tr
-                        key={member.id}
-                        className={`hover:bg-gray-50 cursor-pointer ${
-                          selectedMembers.includes(member.id) ? 'bg-red-50' : ''
-                        }`}
-                        onClick={() => toggleMember(member.id)}
-                      >
-                        <td className="px-6 py-4 whitespace-nowrap">
+                      <li key={member.id} className="p-4 hover:bg-gray-50">
+                        <div className="flex items-center">
                           <input
                             type="checkbox"
-                            checked={selectedMembers.includes(member.id)}
-                            onChange={() => toggleMember(member.id)}
                             className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
-                            onClick={(e) => e.stopPropagation()}
+                            checked={selectedMemberIds.includes(member.id)}
+                            onChange={() => toggleMemberSelection(member.id)}
                           />
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
+                          <div className="ml-3 flex items-center">
                             <div className="flex-shrink-0 h-10 w-10">
                               {member.photo ? (
                                 <img
@@ -187,56 +157,35 @@ const AddMembers: React.FC<AddMembersProps> = ({ somiti, availableMembers }) => 
                               )}
                             </div>
                             <div className="ml-4">
-                              <div className="text-sm font-medium text-gray-900">
-                                {member.name}
-                              </div>
-                              {member.email && (
-                                <div className="text-sm text-gray-500">
-                                  {member.email}
-                                </div>
-                              )}
+                              <div className="text-sm font-medium text-gray-900">{member.name}</div>
+                              <div className="text-sm text-gray-500">{member.phone}</div>
                             </div>
                           </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {member.phone}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {member.address || '-'}
-                        </td>
-                      </tr>
+                        </div>
+                      </li>
                     ))}
-                  </tbody>
-                </table>
+                  </ul>
+                </div>
               )}
-            </div>
-          </div>
 
-          <div className="mt-6 flex items-center justify-between">
-            <div className="text-sm text-gray-700">
-              {selectedMembers.length} জন সদস্য নির্বাচিত
-            </div>
-
-            <div className="flex space-x-3">
-              <Link
-                href={`/organization/somitis/${somiti.id}/members`}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md font-semibold text-xs text-gray-700 uppercase tracking-widest shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-25 transition ease-in-out duration-150"
-              >
-                বাতিল করুন
-              </Link>
-              <button
-                type="submit"
-                disabled={processing || selectedMembers.length === 0}
-                className="inline-flex items-center px-4 py-2 bg-red-700 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-red-800 active:bg-red-900 focus:outline-none focus:border-red-900 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-25 transition ease-in-out duration-150"
-              >
-                {processing ? 'প্রসেসিং...' : 'সদস্য যোগ করুন'}
-              </button>
-            </div>
+              <div className="flex items-center justify-end mt-6">
+                <SecondaryButton onClick={handleCancel} className="mr-3" disabled={processing}>
+                  বাতিল করুন
+                </SecondaryButton>
+                <PrimaryButton
+                  type="submit"
+                  disabled={processing || selectedMemberIds.length === 0}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  সদস্য যোগ করুন
+                </PrimaryButton>
+              </div>
+            </form>
           </div>
-        </form>
+        </div>
       </div>
     </OrganizationLayout>
   );
 };
 
-export default AddMembers;
+export default SomitiAddMembers;

@@ -16,6 +16,7 @@ class Somiti extends Model
         'type',
         'collection_day',
         'amount',
+        'start_date',
         'is_active',
     ];
 

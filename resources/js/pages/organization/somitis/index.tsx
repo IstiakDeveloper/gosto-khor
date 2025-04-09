@@ -3,7 +3,7 @@ import { Head, Link } from '@inertiajs/react';
 import OrganizationLayout from '@/layouts/organization-layout';
 import { Somiti, PaginatedData } from '@/types';
 
-interface SomitisIndexProps {
+interface SomitiIndexProps {
   somitis: PaginatedData<Somiti>;
   filters: {
     search?: string;
@@ -14,7 +14,7 @@ interface SomitisIndexProps {
   };
 }
 
-const SomitisIndex: React.FC<SomitisIndexProps> = ({ somitis, filters }) => {
+const SomitiIndex: React.FC<SomitiIndexProps> = ({ somitis, filters }) => {
   const [searchTerm, setSearchTerm] = useState(filters.search || '');
 
   const handleSearch = (e: React.FormEvent) => {
@@ -54,10 +54,6 @@ const SomitisIndex: React.FC<SomitisIndexProps> = ({ somitis, filters }) => {
     }
 
     window.location.href = url.toString();
-  };
-
-  const formatAmount = (amount: number): string => {
-    return '৳' + amount.toLocaleString('bn-BD');
   };
 
   const getSortIcon = (field: string) => {
@@ -125,9 +121,9 @@ const SomitisIndex: React.FC<SomitisIndexProps> = ({ somitis, filters }) => {
             className="rounded-md border-gray-300 focus:border-red-300 focus:ring focus:ring-red-200 focus:ring-opacity-50"
           >
             <option value="">সব ধরন</option>
-            <option value="daily">দৈনিক</option>
-            <option value="weekly">সাপ্তাহিক</option>
             <option value="monthly">মাসিক</option>
+            <option value="weekly">সাপ্তাহিক</option>
+            <option value="daily">দৈনিক</option>
           </select>
 
           <select
@@ -168,19 +164,10 @@ const SomitisIndex: React.FC<SomitisIndexProps> = ({ somitis, filters }) => {
                 </th>
                 <th
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                  onClick={() => handleSortChange('collection_day')}
-                >
-                  <div className="flex items-center space-x-1">
-                    <span>সংগ্রহের দিন</span>
-                    {getSortIcon('collection_day')}
-                  </div>
-                </th>
-                <th
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
                   onClick={() => handleSortChange('amount')}
                 >
                   <div className="flex items-center space-x-1">
-                    <span>হার</span>
+                    <span>পরিমাণ</span>
                     {getSortIcon('amount')}
                   </div>
                 </th>
@@ -189,7 +176,7 @@ const SomitisIndex: React.FC<SomitisIndexProps> = ({ somitis, filters }) => {
                   onClick={() => handleSortChange('members_count')}
                 >
                   <div className="flex items-center space-x-1">
-                    <span>সদস্য</span>
+                    <span>সদস্য সংখ্যা</span>
                     {getSortIcon('members_count')}
                   </div>
                 </th>
@@ -210,7 +197,7 @@ const SomitisIndex: React.FC<SomitisIndexProps> = ({ somitis, filters }) => {
             <tbody className="bg-white divide-y divide-gray-200">
               {somitis.data.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
+                  <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
                     কোন সমিতি পাওয়া যায়নি
                   </td>
                 </tr>
@@ -218,35 +205,23 @@ const SomitisIndex: React.FC<SomitisIndexProps> = ({ somitis, filters }) => {
                 somitis.data.map((somiti) => (
                   <tr key={somiti.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0 h-10 w-10 rounded-full bg-red-100 flex items-center justify-center">
-                          <span className="font-bold text-red-700">
-                            {somiti.name.charAt(0).toUpperCase()}
-                          </span>
-                        </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">
-                            {somiti.name}
-                          </div>
-                        </div>
+                      <div className="text-sm font-medium text-gray-900">{somiti.name}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">
+                        {somiti.type === 'monthly' && 'মাসিক'}
+                        {somiti.type === 'weekly' && 'সাপ্তাহিক'}
+                        {somiti.type === 'daily' && 'দৈনিক'}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {somiti.type === 'monthly' && somiti.collection_day && `মাসের ${somiti.collection_day} তারিখ`}
+                        {somiti.type === 'weekly' && somiti.collection_day !== null && [
+                          'রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার', 'বৃহস্পতিবার', 'শুক্রবার', 'শনিবার'
+                        ][somiti.collection_day]}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
-                        {somiti.type === 'daily' ? 'দৈনিক' : somiti.type === 'weekly' ? 'সাপ্তাহিক' : 'মাসিক'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {somiti.type === 'daily' ? (
-                        'প্রতিদিন'
-                      ) : somiti.type === 'weekly' ? (
-                        somiti.collection_day_name || 'অনির্ধারিত'
-                      ) : (
-                        somiti.collection_day ? `মাসের ${somiti.collection_day} তারিখ` : 'অনির্ধারিত'
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {formatAmount(somiti.amount)}
+                      <div className="text-sm text-gray-900">৳ {somiti.amount}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {somiti.members_count || 0} জন
@@ -271,7 +246,7 @@ const SomitisIndex: React.FC<SomitisIndexProps> = ({ somitis, filters }) => {
 
                         <Link
                           href={`/organization/somitis/${somiti.id}/members`}
-                          className="text-blue-600 hover:text-blue-800"
+                          className="text-indigo-600 hover:text-indigo-800"
                           title="সদস্য দেখুন"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -280,12 +255,22 @@ const SomitisIndex: React.FC<SomitisIndexProps> = ({ somitis, filters }) => {
                         </Link>
 
                         <Link
-                          href={`/organization/somitis/${somiti.id}/process-collection`}
-                          className="text-green-600 hover:text-green-800"
-                          title="সংগ্রহ করুন"
+                          href={`/organization/somitis/${somiti.id}/payments`}
+                          className="text-blue-600 hover:text-blue-800"
+                          title="পেমেন্ট দেখুন"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </Link>
+
+                        <Link
+                          href={`/organization/somitis/${somiti.id}/process-collection`}
+                          className="text-green-600 hover:text-green-800"
+                          title="কালেকশন প্রসেস করুন"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
                           </svg>
                         </Link>
 
@@ -372,4 +357,4 @@ const SomitisIndex: React.FC<SomitisIndexProps> = ({ somitis, filters }) => {
   );
 };
 
-export default SomitisIndex;
+export default SomitiIndex;

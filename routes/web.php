@@ -97,17 +97,32 @@ Route::middleware('auth')->group(function () {
     Route::prefix('organization')->middleware('organization')->name('organization.')->group(function () {
         Route::get('/dashboard', [OrganizationDashboardController::class, 'index'])->name('dashboard');
 
-        // Somiti
-        Route::get('/somitis/{somiti}/members', [SomitiController::class, 'members'])->name('somitis.members');
-        Route::get('/somitis/{somiti}/add-members', [SomitiController::class, 'addMembersForm'])->name('somitis.add-members');
-        Route::post('/somitis/{somiti}/add-members', [SomitiController::class, 'addMembers'])->name('somitis.store-members');
-        Route::delete('/somitis/{somiti}/members/{member}', [SomitiController::class, 'removeMember'])->name('somitis.remove-member');
-        Route::put('/somitis/{somiti}/members/{member}/status', [SomitiController::class, 'updateMemberStatus'])->name('somitis.update-member-status');
+        Route::get('/somitis', [SomitiController::class, 'index'])->name('somitis.index');
+        Route::get('/somitis/create', [SomitiController::class, 'create'])->name('somitis.create');
+        Route::post('/somitis', [SomitiController::class, 'store'])->name('somitis.store');
+        Route::get('/somitis/{somiti}', [SomitiController::class, 'show'])->name('somitis.show');
+        Route::get('/somitis/{somiti}/edit', [SomitiController::class, 'edit'])->name('somitis.edit');
+        Route::put('/somitis/{somiti}', [SomitiController::class, 'update'])->name('somitis.update');
+        Route::delete('/somitis/{somiti}', [SomitiController::class, 'destroy'])->name('somitis.destroy');
 
+        // Somiti member management
+        Route::get('/somitis/{somiti}/members', [SomitiController::class, 'members'])->name('somitis.members');
+        Route::get('/somitis/{somiti}/add-members', [SomitiController::class, 'addMembersForm'])->name('somitis.add-members.form');
+        Route::post('/somitis/{somiti}/add-members', [SomitiController::class, 'addMembers'])->name('somitis.add-members');
+        Route::get('/somitis/{somiti}/members/{member}/remove', [SomitiController::class, 'removeMember'])->name('somitis.members.remove');
+        Route::post('/somitis/{somiti}/members/{member}/status', [SomitiController::class, 'updateMemberStatus'])->name('somitis.members.status');
+
+        // Somiti payment management
         Route::get('/somitis/{somiti}/payments', [SomitiController::class, 'payments'])->name('somitis.payments');
         Route::get('/somitis/{somiti}/process-collection', [SomitiController::class, 'processCollection'])->name('somitis.process-collection');
-        Route::post('/somitis/{somiti}/process-collection', [SomitiController::class, 'saveCollection'])->name('somitis.save-collection');
-        Route::resource('somitis', SomitiController::class);
+        Route::post('/somitis/{somiti}/save-collection', [SomitiController::class, 'saveCollection'])->name('somitis.save-collection');
+
+        // Payment status management
+        Route::post('/payments/{payment}/status', [SomitiController::class, 'updatePaymentStatus'])->name('payments.update-status');
+
+        // Reports and analytics
+        Route::get('/somitis/{somiti}/generate-report', [SomitiController::class, 'generateReport'])->name('somitis.report');
+        Route::get('/somitis/{somiti}/collection-calendar', [SomitiController::class, 'collectionCalendar'])->name('somitis.calendar');
 
         // Members
         Route::get('/members/{member}/payments', [MemberController::class, 'payments'])->name('members.payments');

@@ -1,345 +1,293 @@
 import React, { useState } from 'react';
-import { Head, useForm, Link } from '@inertiajs/react';
+import { Head, Link, useForm } from '@inertiajs/react';
 import OrganizationLayout from '@/layouts/organization-layout';
+import InputError from '@/components/input-error';
+import PrimaryButton from '@/components/primary-button';
+import SecondaryButton from '@/components/secondary-button';
 import { Somiti, Member } from '@/types';
 
-interface MemberWithPivot extends Member {
-    pivot: {
-        due_amount: number;
-        is_active: boolean;
-    };
-    payment_amount: number;
-    payment_status: string;
+interface SomitiProcessCollectionProps {
+  somiti: Somiti;
+  members: (Member & { pivot: { due_amount: number; is_active: boolean }; total_due: number });
+  collectionDate: string;
+  collectionDay: string;
 }
 
-interface ProcessCollectionProps {
-    somiti: Somiti;
-    members: (Member & {
-        pivot: {
-            due_amount: number;
-            is_active: boolean;
-        };
-    })[];
-    collectionDate: string;
-    collectionDay: string;
-}
-
-const ProcessCollection: React.FC<ProcessCollectionProps> = ({
-    somiti,
-    members,
-    collectionDate,
-    collectionDay
+const SomitiProcessCollection: React.FC<SomitiProcessCollectionProps> = ({
+  somiti,
+  members,
+  collectionDate,
+  collectionDay,
 }) => {
-    const [searchTerm, setSearchTerm] = useState('');
+  // Initialize the payment state for each member
+  const initialPayments = members.map((member) => ({
+    member_id: member.id,
+    amount: somiti.amount,  // Default to the somiti amount
+    status: 'paid' as 'paid' | 'pending',
+    member_name: member.name,
+    member_photo: member.photo,
+    due_amount: member.total_due,
+  }));
 
-    // Initialize members with payment data
-    const initialPayments = members.map(member => ({
-        ...member,
-        payment_amount: somiti.amount,
-        payment_status: 'paid'
+  const { data, setData, post, processing, errors } = useForm({
+    collection_date: collectionDate,
+    payments: initialPayments,
+  });
+
+  const [showFullDue, setShowFullDue] = useState(false);
+
+  // Function to update a specific payment amount
+  const updatePaymentAmount = (index: number, amount: string) => {
+    const newPayments = [...data.payments];
+    newPayments[index].amount = parseFloat(amount) || 0;
+    setData('payments', newPayments);
+  };
+
+  // Function to update a specific payment status
+  const updatePaymentStatus = (index: number, status: 'paid' | 'pending') => {
+    const newPayments = [...data.payments];
+    newPayments[index].status = status;
+    setData('payments', newPayments);
+  };
+
+  // Set all payments to a specific status
+  const setAllPaymentStatus = (status: 'paid' | 'pending') => {
+    const newPayments = data.payments.map(payment => ({
+      ...payment,
+      status,
     }));
+    setData('payments', newPayments);
+  };
 
-    const [memberPayments, setMemberPayments] = useState<MemberWithPivot[]>(initialPayments);
+  // Pay full dues for a specific member
+  const payFullDue = (index: number) => {
+    const newPayments = [...data.payments];
+    newPayments[index].amount = newPayments[index].due_amount;
+    setData('payments', newPayments);
+  };
 
-    const { data, setData, post, processing, errors } = useForm({
-        collection_date: collectionDate,
-        payments: initialPayments.map(member => ({
-            member_id: member.id,
-            amount: member.payment_amount,
-            status: member.payment_status
-        }))
-    });
+  // Format date
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return new Intl.DateTimeFormat('bn-BD', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    }).format(date);
+  };
 
-    const updatePaymentData = () => {
-        setData('payments', memberPayments.map(member => ({
-            member_id: member.id,
-            amount: member.payment_amount,
-            status: member.payment_status
-        })));
-    };
+  // Format currency
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('bn-BD', {
+      style: 'currency',
+      currency: 'BDT',
+      minimumFractionDigits: 2,
+    }).format(amount);
+  };
 
-    const handleAmountChange = (id: number, amount: number) => {
-        const newMemberPayments = memberPayments.map(member => {
-            if (member.id === id) {
-                return {
-                    ...member,
-                    payment_amount: amount
-                };
-            }
-            return member;
-        });
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    post(`/organization/somitis/${somiti.id}/save-collection`);
+  };
 
-        setMemberPayments(newMemberPayments);
-        updatePaymentData();
-    };
+  const handleCancel = () => {
+    window.history.back();
+  };
 
-    const handleStatusChange = (id: number, status: string) => {
-        const newMemberPayments = memberPayments.map(member => {
-            if (member.id === id) {
-                return {
-                    ...member,
-                    payment_status: status
-                };
-            }
-            return member;
-        });
+  return (
+    <OrganizationLayout title={`${somiti.name} - কালেকশন প্রসেস`}>
+      <Head title={`${somiti.name} - কালেকশন প্রসেস`} />
 
-        setMemberPayments(newMemberPayments);
-        updatePaymentData();
-    };
+      <div className="py-6">
+        {/* Header */}
+        <div className="mb-6">
+          <Link
+            href={`/organization/somitis/${somiti.id}`}
+            className="text-red-600 hover:text-red-800 flex items-center text-sm"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            সমিতিতে ফিরে যান
+          </Link>
+          <h2 className="text-2xl font-semibold text-gray-800 mt-1">
+            {somiti.name} - কালেকশন প্রসেস
+          </h2>
+        </div>
 
-    const formatAmount = (amount: number): string => {
-        return '৳' + amount.toLocaleString('bn-BD');
-    };
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-
-        // Update the form data before submitting
-        setData('payments', memberPayments.map(member => ({
-            member_id: member.id,
-            amount: member.payment_amount,
-            status: member.payment_status
-        })));
-
-        post(`/organization/somitis/${somiti.id}/save-collection`);
-    };
-
-    // Filter members based on search term
-    const filteredMembers = memberPayments.filter(member =>
-        member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        member.phone.includes(searchTerm)
-    );
-
-    // Calculate total collection
-    const totalCollection = memberPayments.reduce((total, member) => {
-        return total + (member.payment_amount || 0);
-    }, 0);
-
-    // Count paid and pending collections
-    const paidCollections = memberPayments.filter(member => member.payment_status === 'paid').length;
-    const pendingCollections = memberPayments.filter(member => member.payment_status === 'pending').length;
-
-    return (
-        <OrganizationLayout title={`কালেকশন প্রসেস করুন: ${somiti.name}`}>
-            <Head title={`কালেকশন প্রসেস করুন: ${somiti.name}`} />
-
-            <div className="mb-6">
-                <Link
-                    href={`/organization/somitis/${somiti.id}`}
-                    className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md font-semibold text-xs text-gray-700 uppercase tracking-widest shadow-sm hover:text-gray-500 focus:outline-none focus:border-blue-300 focus:ring focus:ring-blue-200 active:text-gray-800 active:bg-gray-50 transition"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                    </svg>
-                    সমিতি বিবরণে ফিরে যান
-                </Link>
+        {/* Collection Info Card */}
+        <div className="bg-white shadow-md rounded-lg overflow-hidden mb-6">
+          <div className="p-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div>
+                <h3 className="text-sm font-medium text-gray-500">সমিতি</h3>
+                <p className="mt-1 text-lg font-semibold text-gray-900">{somiti.name}</p>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-gray-500">কালেকশনের তারিখ</h3>
+                <p className="mt-1 text-lg font-semibold text-gray-900">
+                  {formatDate(collectionDate)} ({collectionDay})
+                </p>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-gray-500">স্ট্যান্ডার্ড পরিমাণ</h3>
+                <p className="mt-1 text-lg font-semibold text-gray-900">{formatCurrency(somiti.amount)}</p>
+              </div>
             </div>
+          </div>
+        </div>
 
-            <div className="bg-white p-6 rounded-lg shadow-md">
-                <div className="mb-6">
-                    <h2 className="text-lg font-medium text-gray-900">
-                        {somiti.name} - কালেকশন প্রসেস করুন
-                    </h2>
-                    <p className="mt-1 text-sm text-gray-600">
-                        কালেকশন তারিখ: <span className="font-medium">{new Date(collectionDate).toLocaleDateString('bn-BD')}</span> ({collectionDay})
-                    </p>
+        {/* Main Form */}
+        <div className="bg-white shadow-md rounded-lg overflow-hidden">
+          <div className="p-6">
+            <form onSubmit={handleSubmit}>
+              <div className="mb-6 flex justify-between items-center">
+                <div className="flex items-center">
+                  <h3 className="font-medium text-gray-700">সক্রিয় সদস্য ({members.length})</h3>
+                  <div className="ml-4">
+                    <label className="flex items-center text-sm">
+                      <input
+                        type="checkbox"
+                        className="form-checkbox h-4 w-4 text-red-600 transition duration-150 ease-in-out"
+                        checked={showFullDue}
+                        onChange={(e) => setShowFullDue(e.target.checked)}
+                      />
+                      <span className="ml-2">পুরো বকেয়া দেখান</span>
+                    </label>
+                  </div>
                 </div>
-
-                {errors.collection_date && (
-                    <div className="mb-6 bg-red-50 border-l-4 border-red-400 p-4">
-                        <div className="flex">
-                            <div className="flex-shrink-0">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                                </svg>
-                            </div>
-                            <div className="ml-3">
-                                <p className="text-sm text-red-700">
-                                    {errors.collection_date}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {errors.payments && (
-                    <div className="mb-6 bg-red-50 border-l-4 border-red-400 p-4">
-                        <div className="flex">
-                            <div className="flex-shrink-0">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                                </svg>
-                            </div>
-                            <div className="ml-3">
-                                <p className="text-sm text-red-700">
-                                    {errors.payments}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                <div className="mb-6">
-                    <div className="flex flex-col md:flex-row md:items-center gap-4">
-                        <div className="w-full md:w-1/2">
-                            <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-1">
-                                সদস্য খুঁজুন
-                            </label>
-                            <input
-                                id="search"
-                                type="text"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                placeholder="নাম বা ফোন নম্বর দিয়ে খুঁজুন"
-                                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500 sm:text-sm"
-                            />
-                        </div>
-
-                        <div className="w-full md:w-1/2">
-                            <div className="bg-gray-100 p-4 rounded-md">
-                                <div className="grid grid-cols-3 gap-3">
-                                    <div>
-                                        <p className="text-xs text-gray-500">মোট কালেকশন</p>
-                                        <p className="text-lg font-semibold text-gray-900">{formatAmount(totalCollection)}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-xs text-gray-500">পরিশোধিত</p>
-                                        <p className="text-lg font-semibold text-green-600">{paidCollections} জন</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-xs text-gray-500">বকেয়া</p>
-                                        <p className="text-lg font-semibold text-yellow-600">{pendingCollections} জন</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                <div className="flex space-x-4">
+                  <button
+                    type="button"
+                    onClick={() => setAllPaymentStatus('paid')}
+                    className="text-sm text-green-600 hover:text-green-800"
+                  >
+                    সবাইকে পরিশোধিত হিসেবে চিহ্নিত করুন
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAllPaymentStatus('pending')}
+                    className="text-sm text-yellow-600 hover:text-yellow-800"
+                  >
+                    সবাইকে বকেয়া হিসেবে চিহ্নিত করুন
+                  </button>
                 </div>
+              </div>
 
-                <form onSubmit={handleSubmit}>
-                    <div className="mb-4">
-                        <label htmlFor="collection_date" className="block text-sm font-medium text-gray-700 mb-1">
-                            কালেকশন তারিখ
-                        </label>
-                        <input
-                            id="collection_date"
-                            type="date"
-                            value={data.collection_date}
-                            onChange={(e) => setData('collection_date', e.target.value)}
-                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500 sm:text-sm"
-                            required
-                        />
-                    </div>
+              <InputError message={errors.payments} className="mb-4" />
 
-                    <div className="border rounded-md overflow-hidden mb-6">
-                        <div className="max-h-96 overflow-y-auto">
-                            {filteredMembers.length === 0 ? (
-                                <div className="p-6 text-center text-gray-500">
-                                    কোন সক্রিয় সদস্য পাওয়া যায়নি
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        সদস্য
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        মোট বকেয়া
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        পেমেন্ট পরিমাণ
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        স্ট্যাটাস
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {data.payments.map((payment, index) => (
+                      <tr key={payment.member_id} className={payment.status === 'paid' ? 'bg-green-50' : ''}>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <div className="flex-shrink-0 h-10 w-10">
+                              {payment.member_photo ? (
+                                <img
+                                  className="h-10 w-10 rounded-full object-cover"
+                                  src={`/storage/${payment.member_photo}`}
+                                  alt={payment.member_name}
+                                />
+                              ) : (
+                                <div className="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center">
+                                  <span className="font-bold text-red-700">
+                                    {payment.member_name.charAt(0).toUpperCase()}
+                                  </span>
                                 </div>
-                            ) : (
-                                <table className="min-w-full divide-y divide-gray-200">
-                                    <thead className="bg-gray-50 sticky top-0">
-                                        <tr>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                সদস্য
-                                            </th>
-                                            <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                বর্তমান বকেয়া
-                                            </th>
-                                            <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                পরিমাণ
-                                            </th>
-                                            <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                স্ট্যাটাস
-                                            </th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="bg-white divide-y divide-gray-200">
-                                        {filteredMembers.map((member) => (
-                                            <tr key={member.id} className="hover:bg-gray-50">
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="flex items-center">
-                                                        <div className="flex-shrink-0 h-10 w-10">
-                                                            {member.photo ? (
-                                                                <img
-                                                                    className="h-10 w-10 rounded-full object-cover"
-                                                                    src={`/storage/${member.photo}`}
-                                                                    alt={member.name}
-                                                                />
-                                                            ) : (
-                                                                <div className="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center">
-                                                                    <span className="font-bold text-red-700">
-                                                                        {member.name.charAt(0).toUpperCase()}
-                                                                    </span>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                        <div className="ml-4">
-                                                            <div className="text-sm font-medium text-gray-900">
-                                                                {member.name}
-                                                            </div>
-                                                            <div className="text-sm text-gray-500">
-                                                                {member.phone}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
-                                                    {formatAmount(member.pivot.due_amount)}
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="flex justify-center">
-                                                        <input
-                                                            type="number"
-                                                            min="0"
-                                                            step="any"
-                                                            value={member.payment_amount}
-                                                            onChange={(e) => handleAmountChange(member.id, parseFloat(e.target.value) || 0)}
-                                                            className="block w-24 rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500 sm:text-sm text-right"
-                                                        />
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="flex justify-center">
-                                                        <select
-                                                            value={member.payment_status}
-                                                            onChange={(e) => handleStatusChange(member.id, e.target.value)}
-                                                            className="block w-32 rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500 sm:text-sm"
-                                                        >
-                                                            <option value="paid">পরিশোধিত</option>
-                                                            <option value="pending">বকেয়া</option>
-                                                        </select>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                              )}
+                            </div>
+                            <div className="ml-4">
+                              <div className="text-sm font-medium text-gray-900">
+                                {payment.member_name}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">
+                            {formatCurrency(payment.due_amount)}
+                            {payment.due_amount > 0 && showFullDue && (
+                              <button
+                                type="button"
+                                onClick={() => payFullDue(index)}
+                                className="ml-2 text-xs text-blue-600 hover:text-blue-800"
+                              >
+                                পুরো পরিমাণ জমা করুন
+                              </button>
                             )}
-                        </div>
-                    </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="relative rounded-md shadow-sm">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                              <span className="text-gray-500 sm:text-sm">৳</span>
+                            </div>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              className={`pl-7 block w-full sm:w-32 shadow-sm border-gray-300 rounded-md focus:ring-red-500 focus:border-red-500 sm:text-sm ${
+                                payment.amount !== somiti.amount ? 'bg-yellow-50' : ''
+                              }`}
+                              value={payment.amount}
+                              onChange={(e) => updatePaymentAmount(index, e.target.value)}
+                            />
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <select
+                            className={`block w-full shadow-sm border-gray-300 rounded-md focus:ring-red-500 focus:border-red-500 sm:text-sm ${
+                              payment.status === 'pending' ? 'bg-yellow-50 text-yellow-800' : 'bg-green-50 text-green-800'
+                            }`}
+                            value={payment.status}
+                            onChange={(e) => updatePaymentStatus(index, e.target.value as 'paid' | 'pending')}
+                          >
+                            <option value="paid">পরিশোধিত</option>
+                            <option value="pending">বকেয়া</option>
+                          </select>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
 
-                    <div className="flex items-center justify-end space-x-3">
-                        <Link
-                            href={`/organization/somitis/${somiti.id}`}
-                            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md font-semibold text-xs text-gray-700 uppercase tracking-widest shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-25 transition ease-in-out duration-150"
-                        >
-                            বাতিল করুন
-                        </Link>
-                        <button
-                            type="submit"
-                            disabled={processing || filteredMembers.length === 0}
-                            className="inline-flex items-center px-4 py-2 bg-red-700 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-red-800 active:bg-red-900 focus:outline-none focus:border-red-900 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-25 transition ease-in-out duration-150"
-                        >
-                            {processing ? 'প্রসেসিং...' : 'কালেকশন সেভ করুন'}
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </OrganizationLayout>
-    );
+              <div className="flex items-center justify-end mt-6">
+                <SecondaryButton onClick={handleCancel} className="mr-3" disabled={processing}>
+                  বাতিল করুন
+                </SecondaryButton>
+                <PrimaryButton
+                  type="submit"
+                  disabled={processing}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  কালেকশন সম্পন্ন করুন
+                </PrimaryButton>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </OrganizationLayout>
+  );
 };
 
-export default ProcessCollection;
+export default SomitiProcessCollection;
