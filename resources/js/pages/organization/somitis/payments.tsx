@@ -1,492 +1,459 @@
-import React, { useState } from 'react';
-import { Head, Link, useForm } from '@inertiajs/react';
+import React, { useState, useEffect } from 'react';
+import { Head, useForm } from '@inertiajs/react';
 import OrganizationLayout from '@/layouts/organization-layout';
-import { Somiti, Payment as PaymentType, PaginatedData } from '@/types';
-import Modal from '@/components/modal';
+import {
+    BanknoteIcon,
+    CreditCardIcon,
+    SearchIcon,
+    CalendarIcon,
+    XCircleIcon,
+    CheckIcon
+} from 'lucide-react';
 
-interface SomitiPaymentsProps {
-  somiti: Somiti;
-  payments: PaginatedData<PaymentType>;
-  filters: {
-    search?: string;
-    date_from?: string;
-    date_to?: string;
-    status?: string;
-    sort_field?: string;
-    sort_direction?: string;
-  };
+interface Member {
+    id: number;
+    name: string;
+    phone: string;
+    due_amount: number;
+    expected_amount: number;
+    paid_amount: number;
 }
 
-const SomitiPayments: React.FC<SomitiPaymentsProps> = ({ somiti, payments, filters }) => {
-  const [searchTerm, setSearchTerm] = useState(filters.search || '');
-  const [selectedPayment, setSelectedPayment] = useState<PaymentType | null>(null);
-  const [showStatusModal, setShowStatusModal] = useState(false);
+interface Somiti {
+    id: number;
+    name: string;
+    type: 'daily' | 'weekly' | 'monthly';
+    amount: number;
+    collection_day: number;
+}
 
-  const { data, setData, post, processing, reset } = useForm({
-    status: '',
-  });
+interface PaymentFormProps {
+    auth: {
+        user: any;
+    };
+    somiti: Somiti;
+    members: Member[];
+    paymentMethods: Record<string, string>;
+    totalDue: number;
+    nextCollectionDate: string;
+}
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    const url = new URL(window.location.href);
-    if (searchTerm) {
-      url.searchParams.set('search', searchTerm);
-    } else {
-      url.searchParams.delete('search');
-    }
-    window.location.href = url.toString();
-  };
+const SomitiPaymentForm: React.FC<PaymentFormProps> = ({
+    auth,
+    somiti,
+    members,
+    paymentMethods,
+    totalDue,
+    nextCollectionDate
+}) => {
+    const [selectedMembers, setSelectedMembers] = useState<number[]>([]);
+    const [selectAll, setSelectAll] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
 
-  const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const url = new URL(window.location.href);
+    const { data, setData, post, processing, errors, reset } = useForm({
+        somiti_id: somiti.id,
+        payment_date: new Date().toISOString().split('T')[0],
+        payment_method: 'cash',
+        transaction_id: '',
+        notes: '',
+        payments: [] as { member_id: number; amount: number; collection_date: string }[],
+    });
 
-    if (e.target.value) {
-      url.searchParams.set(e.target.name, e.target.value);
-    } else {
-      url.searchParams.delete(e.target.name);
-    }
-
-    window.location.href = url.toString();
-  };
-
-  const handleSortChange = (field: string) => {
-    const url = new URL(window.location.href);
-
-    if (filters.sort_field === field) {
-      // Toggle direction if already sorting by this field
-      const newDirection = filters.sort_direction === 'asc' ? 'desc' : 'asc';
-      url.searchParams.set('sort_direction', newDirection);
-    } else {
-      // Set new sort field with default ascending direction
-      url.searchParams.set('sort_field', field);
-      url.searchParams.set('sort_direction', 'asc');
-    }
-
-    window.location.href = url.toString();
-  };
-
-  const openStatusModal = (payment: PaymentType) => {
-    setSelectedPayment(payment);
-    setData('status', payment.status);
-    setShowStatusModal(true);
-  };
-
-  const closeStatusModal = () => {
-    setSelectedPayment(null);
-    setShowStatusModal(false);
-    reset();
-  };
-
-  const updatePaymentStatus = () => {
-    if (selectedPayment) {
-      post(`/organization/payments/${selectedPayment.id}/status`, {
-        onSuccess: () => {
-          closeStatusModal();
-        },
-      });
-    }
-  };
-
-  // Format date
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return new Intl.DateTimeFormat('bn-BD', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    }).format(date);
-  };
-
-  // Format currency
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('bn-BD', {
-      style: 'currency',
-      currency: 'BDT',
-      minimumFractionDigits: 2,
-    }).format(amount);
-  };
-
-  const getSortIcon = (field: string) => {
-    if (filters.sort_field !== field) {
-      return (
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 opacity-40" viewBox="0 0 20 20" fill="currentColor">
-          <path d="M5 12a1 1 0 102 0V6.414l1.293 1.293a1 1 0 001.414-1.414l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L5 6.414V12z" />
-          <path d="M15 8a1 1 0 10-2 0v5.586l-1.293-1.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L15 13.586V8z" />
-        </svg>
-      );
-    }
-
-    return filters.sort_direction === 'asc' ? (
-      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-        <path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clipRule="evenodd" />
-      </svg>
-    ) : (
-      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-      </svg>
+    // Filter members based on search term
+    const filteredMembers = members.filter(
+        (member) =>
+            member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            member.phone.includes(searchTerm)
     );
-  };
 
-  return (
-    <OrganizationLayout title={`${somiti.name} - পেমেন্ট তালিকা`}>
-      <Head title={`${somiti.name} - পেমেন্ট তালিকা`} />
+    // Handle select all checkbox
+    const handleSelectAll = () => {
+        const newSelectAll = !selectAll;
+        setSelectAll(newSelectAll);
+        if (newSelectAll) {
+            setSelectedMembers(filteredMembers.map((member) => member.id));
+        } else {
+            setSelectedMembers([]);
+        }
+    };
 
-      <div className="py-6">
-        {/* Header */}
-        <div className="mb-6">
-          <Link
-            href={`/organization/somitis/${somiti.id}`}
-            className="text-red-600 hover:text-red-800 flex items-center text-sm"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            সমিতিতে ফিরে যান
-          </Link>
-          <h2 className="text-2xl font-semibold text-gray-800 mt-1">
-            {somiti.name} - পেমেন্ট তালিকা
-          </h2>
-        </div>
+    // Handle individual member selection
+    const handleSelectMember = (memberId: number) => {
+        if (selectedMembers.includes(memberId)) {
+            setSelectedMembers(selectedMembers.filter((id) => id !== memberId));
+        } else {
+            setSelectedMembers([...selectedMembers, memberId]);
+        }
+    };
 
-        {/* Filters */}
-        <div className="bg-white shadow-md rounded-lg overflow-hidden mb-6">
-          <div className="p-6">
-            <form onSubmit={handleSearch} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div>
-                <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-1">
-                  সদস্য খুঁজুন
-                </label>
-                <div className="flex rounded-md shadow-sm">
-                  <input
-                    id="search"
-                    type="text"
-                    name="search"
-                    placeholder="নাম বা ফোন নম্বর"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="flex-1 rounded-l-md border-gray-300 focus:border-red-300 focus:ring focus:ring-red-200 focus:ring-opacity-50"
-                  />
-                  <button
-                    type="submit"
-                    className="inline-flex items-center px-3 py-2 border border-l-0 border-gray-300 bg-gray-50 text-gray-500 rounded-r-md hover:text-gray-700 focus:outline-none focus:border-red-300 focus:ring focus:ring-red-200 focus:ring-opacity-50"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
+    // Update form data when selections change
+    useEffect(() => {
+        const payments = selectedMembers.map((memberId) => {
+            const member = members.find((m) => m.id === memberId);
+            return {
+                member_id: memberId,
+                amount: member?.due_amount || 0,
+                collection_date: nextCollectionDate,
+            };
+        });
+        setData('payments', payments);
+    }, [selectedMembers, nextCollectionDate]);
 
-              <div>
-                <label htmlFor="date_from" className="block text-sm font-medium text-gray-700 mb-1">
-                  শুরুর তারিখ
-                </label>
-                <input
-                  id="date_from"
-                  type="date"
-                  name="date_from"
-                  value={filters.date_from || ''}
-                  onChange={handleFilterChange}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-300 focus:ring focus:ring-red-200 focus:ring-opacity-50"
-                />
-              </div>
+    // Calculate total amount to be paid
+    const totalToPay = data.payments.reduce((sum, payment) => sum + payment.amount, 0);
 
-              <div>
-                <label htmlFor="date_to" className="block text-sm font-medium text-gray-700 mb-1">
-                  শেষের তারিখ
-                </label>
-                <input
-                  id="date_to"
-                  type="date"
-                  name="date_to"
-                  value={filters.date_to || ''}
-                  onChange={handleFilterChange}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-300 focus:ring focus:ring-red-200 focus:ring-opacity-50"
-                />
-              </div>
+    // Handle form submission
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        post(route('organization.somiti.process.payments'), {
+            onSuccess: () => {
+                reset();
+                setSelectedMembers([]);
+                setSelectAll(false);
+            },
+        });
+    };
 
-              <div>
-                <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
-                  স্ট্যাটাস
-                </label>
-                <select
-                  id="status"
-                  name="status"
-                  value={filters.status || ''}
-                  onChange={handleFilterChange}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-300 focus:ring focus:ring-red-200 focus:ring-opacity-50"
-                >
-                  <option value="">সব স্ট্যাটাস</option>
-                  <option value="paid">পরিশোধিত</option>
-                  <option value="pending">বকেয়া</option>
-                  <option value="failed">ব্যর্থ</option>
-                </select>
-              </div>
-            </form>
-          </div>
-        </div>
+    // Handle payment amount change
+    const handleAmountChange = (memberId: number, amount: string) => {
+        const numericAmount = parseFloat(amount) || 0;
+        setData(
+            'payments',
+            data.payments.map((payment) =>
+                payment.member_id === memberId
+                    ? { ...payment, amount: numericAmount }
+                    : payment
+            )
+        );
+    };
 
-        {/* Payments Table */}
-        <div className="bg-white shadow-md rounded-lg overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                    onClick={() => handleSortChange('payment_date')}
-                  >
-                    <div className="flex items-center space-x-1">
-                      <span>পেমেন্ট তারিখ</span>
-                      {getSortIcon('payment_date')}
-                    </div>
-                  </th>
-                  <th
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                    onClick={() => handleSortChange('collection_date')}
-                  >
-                    <div className="flex items-center space-x-1">
-                      <span>কালেকশন তারিখ</span>
-                      {getSortIcon('collection_date')}
-                    </div>
-                  </th>
-                  <th
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                  >
-                    সদস্য
-                  </th>
-                  <th
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                    onClick={() => handleSortChange('amount')}
-                  >
-                    <div className="flex items-center space-x-1">
-                      <span>পরিমাণ</span>
-                      {getSortIcon('amount')}
-                    </div>
-                  </th>
-                  <th
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                    onClick={() => handleSortChange('status')}
-                  >
-                    <div className="flex items-center space-x-1">
-                      <span>স্ট্যাটাস</span>
-                      {getSortIcon('status')}
-                    </div>
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    অ্যাকশন
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {payments.data.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
-                      কোন পেমেন্ট পাওয়া যায়নি
-                    </td>
-                  </tr>
-                ) : (
-                  payments.data.map((payment) => (
-                    <tr key={payment.id} className={`hover:bg-gray-50 ${
-                      payment.status === 'paid' ? 'bg-green-50' :
-                      payment.status === 'pending' ? 'bg-yellow-50' :
-                      'bg-red-50'
-                    }`}>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{formatDate(payment.payment_date)}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{formatDate(payment.collection_date)}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0 h-10 w-10">
-                            {payment.member.photo ? (
-                              <img
-                                className="h-10 w-10 rounded-full object-cover"
-                                src={`/storage/${payment.member.photo}`}
-                                alt={payment.member.name}
-                              />
-                            ) : (
-                              <div className="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center">
-                                <span className="font-bold text-red-700">
-                                  {payment.member.name.charAt(0).toUpperCase()}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900">{payment.member.name}</div>
-                            <div className="text-sm text-gray-500">{payment.member.phone}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">{formatCurrency(payment.amount)}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          payment.status === 'paid' ? 'bg-green-100 text-green-800' :
-                          payment.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-red-100 text-red-800'
-                        }`}>
-                          {payment.status === 'paid' && 'পরিশোধিত'}
-                          {payment.status === 'pending' && 'বকেয়া'}
-                          {payment.status === 'failed' && 'ব্যর্থ'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <button
-                          onClick={() => openStatusModal(payment)}
-                          className="text-blue-600 hover:text-blue-800"
-                          title="স্ট্যাটাস পরিবর্তন করুন"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                          </svg>
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+    // Get Bangla text for somiti type
+    const getSomitiTypeText = (type: string) => {
+        switch (type) {
+            case 'monthly': return 'মাসিক';
+            case 'weekly': return 'সাপ্তাহিক';
+            case 'daily': return 'দৈনিক';
+            default: return type;
+        }
+    };
 
-        {/* Pagination */}
-        {payments.meta && payments.meta.last_page > 1 && (
-          <div className="mt-6">
-            <nav className="flex items-center justify-between">
-              <div className="flex-1 flex justify-between sm:hidden">
-                {payments.meta.current_page > 1 && (
-                  <a
-                    href={payments.links.prev}
-                    className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-                  >
-                    আগে
-                  </a>
-                )}
-                {payments.meta.current_page < payments.meta.last_page && (
-                  <a
-                    href={payments.links.next}
-                    className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-                  >
-                    পরে
-                  </a>
-                )}
-              </div>
-              <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+    // Get Bangla text for day of week (for weekly somitis)
+    const getDayOfWeekText = (day: number) => {
+        const days = ['রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার', 'বৃহস্পতিবার', 'শুক্রবার', 'শনিবার'];
+        return days[day] || '';
+    };
+
+    // Format collection day info based on somiti type
+    const getCollectionDayInfo = () => {
+        if (somiti.type === 'monthly' && somiti.collection_day) {
+            return `মাসের ${somiti.collection_day} তারিখ`;
+        } else if (somiti.type === 'weekly' && somiti.collection_day !== null) {
+            return getDayOfWeekText(somiti.collection_day);
+        }
+        return '';
+    };
+
+    return (
+        <OrganizationLayout title={`পেমেন্ট কালেকশন - ${somiti.name}`}>
+            <Head title={`পেমেন্ট কালেকশন - ${somiti.name}`} />
+
+            <div className="mb-6 flex justify-between items-center">
                 <div>
-                  <p className="text-sm text-gray-700">
-                    মোট <span className="font-medium">{payments.meta.total}</span> পেমেন্টের মধ্যে{' '}
-                    <span className="font-medium">{payments.meta.from}</span> থেকে{' '}
-                    <span className="font-medium">{payments.meta.to}</span> দেখানো হচ্ছে
-                  </p>
+                    <h2 className="text-xl font-semibold">পেমেন্ট কালেকশন - {somiti.name}</h2>
+                    <p className="text-sm text-gray-500">
+                        {getSomitiTypeText(somiti.type)} সমিতি - {getCollectionDayInfo()}
+                    </p>
                 </div>
-                <div>
-                  <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                    {payments.meta.links.map((link, index) => {
-                      if (link.url === null) {
-                        return (
-                          <span
-                            key={index}
-                            className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500"
-                            dangerouslySetInnerHTML={{ __html: link.label }}
-                          />
-                        );
-                      }
-
-                      return (
-                        <a
-                          key={index}
-                          href={link.url}
-                          className={`relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium ${
-                            link.active ? 'z-10 bg-red-50 border-red-500 text-red-600' : 'text-gray-500 hover:bg-gray-50'
-                          }`}
-                          dangerouslySetInnerHTML={{ __html: link.label }}
-                        />
-                      );
-                    })}
-                  </nav>
+                <div className="flex items-center space-x-2">
+                    <BanknoteIcon className="w-5 h-5 text-red-600" />
+                    <span className="text-lg font-bold text-red-600">
+                        মোট বাকি: ৳{totalDue.toLocaleString()}
+                    </span>
                 </div>
-              </div>
-            </nav>
-          </div>
-        )}
-      </div>
-
-      {/* Payment Status Modal */}
-      <Modal show={showStatusModal} onClose={closeStatusModal}>
-        <div className="p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">
-            পেমেন্ট স্ট্যাটাস পরিবর্তন করুন
-          </h3>
-          {selectedPayment && (
-            <div className="mb-6">
-              <p className="text-gray-600 mb-4">
-                <span className="font-medium">{selectedPayment.member.name}</span> এর{' '}
-                <span className="font-medium">{formatDate(selectedPayment.payment_date)}</span> তারিখের{' '}
-                <span className="font-medium">{formatCurrency(selectedPayment.amount)}</span> পেমেন্টের স্ট্যাটাস পরিবর্তন করুন
-              </p>
-
-              <div className="flex items-center space-x-4">
-                <label className="inline-flex items-center">
-                  <input
-                    type="radio"
-                    className="form-radio text-red-600"
-                    name="status"
-                    value="paid"
-                    checked={data.status === 'paid'}
-                    onChange={() => setData('status', 'paid')}
-                  />
-                  <span className="ml-2">পরিশোধিত</span>
-                </label>
-                <label className="inline-flex items-center">
-                  <input
-                    type="radio"
-                    className="form-radio text-red-600"
-                    name="status"
-                    value="pending"
-                    checked={data.status === 'pending'}
-                    onChange={() => setData('status', 'pending')}
-                  />
-                  <span className="ml-2">বকেয়া</span>
-                </label>
-                <label className="inline-flex items-center">
-                  <input
-                    type="radio"
-                    className="form-radio text-red-600"
-                    name="status"
-                    value="failed"
-                    checked={data.status === 'failed'}
-                    onChange={() => setData('status', 'failed')}
-                  />
-                  <span className="ml-2">ব্যর্থ</span>
-                </label>
-              </div>
             </div>
-          )}
-          <div className="flex justify-end space-x-2">
-            <button
-              onClick={closeStatusModal}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-              disabled={processing}
-            >
-              বাতিল করুন
-            </button>
-            <button
-              onClick={updatePaymentStatus}
-              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-              disabled={processing}
-            >
-              হালনাগাদ করুন
-            </button>
-          </div>
-        </div>
-      </Modal>
-    </OrganizationLayout>
-  );
+
+            <div className="bg-white shadow-md rounded-lg overflow-hidden">
+                <div className="p-6">
+                    {/* Summary Card */}
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="flex flex-col">
+                                <span className="text-gray-500 text-sm">সমিতির ধরন</span>
+                                <span className="font-medium capitalize">{getSomitiTypeText(somiti.type)}</span>
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="text-gray-500 text-sm">কালেকশন পরিমাণ</span>
+                                <span className="font-medium">৳{somiti.amount.toLocaleString()}</span>
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="text-gray-500 text-sm">পরবর্তী কালেকশন তারিখ</span>
+                                <span className="font-medium">{nextCollectionDate}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <form onSubmit={handleSubmit}>
+                        {/* Payment Details */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                            <div>
+                                <label htmlFor="payment_date" className="block text-sm font-medium text-gray-700">
+                                    পেমেন্ট তারিখ
+                                </label>
+                                <div className="mt-1 flex rounded-md shadow-sm">
+                                    <span className="inline-flex items-center px-3 py-2 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500">
+                                        <CalendarIcon className="h-4 w-4" />
+                                    </span>
+                                    <input
+                                        type="date"
+                                        id="payment_date"
+                                        className="flex-1 min-w-0 block w-full px-3 py-2 rounded-none rounded-r-md focus:ring-red-500 focus:border-red-500 sm:text-sm border-gray-300"
+                                        value={data.payment_date}
+                                        onChange={(e) => setData('payment_date', e.target.value)}
+                                        required
+                                    />
+                                </div>
+                                {errors.payment_date && (
+                                    <p className="mt-1 text-sm text-red-600">{errors.payment_date}</p>
+                                )}
+                            </div>
+
+                            <div>
+                                <label htmlFor="payment_method" className="block text-sm font-medium text-gray-700">
+                                    পেমেন্ট পদ্ধতি
+                                </label>
+                                <select
+                                    id="payment_method"
+                                    className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-red-500 focus:border-red-500 sm:text-sm rounded-md"
+                                    value={data.payment_method}
+                                    onChange={(e) => setData('payment_method', e.target.value)}
+                                    required
+                                >
+                                    {Object.entries(paymentMethods).map(([value, label]) => (
+                                        <option key={value} value={value}>
+                                            {label}
+                                        </option>
+                                    ))}
+                                </select>
+                                {errors.payment_method && (
+                                    <p className="mt-1 text-sm text-red-600">{errors.payment_method}</p>
+                                )}
+                            </div>
+
+                            <div>
+                                <label htmlFor="transaction_id" className="block text-sm font-medium text-gray-700">
+                                    ট্রানজেকশন আইডি (ঐচ্ছিক)
+                                </label>
+                                <input
+                                    type="text"
+                                    id="transaction_id"
+                                    className="mt-1 focus:ring-red-500 focus:border-red-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+                                    value={data.transaction_id}
+                                    onChange={(e) => setData('transaction_id', e.target.value)}
+                                />
+                                {errors.transaction_id && (
+                                    <p className="mt-1 text-sm text-red-600">{errors.transaction_id}</p>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="mb-6">
+                            <label htmlFor="notes" className="block text-sm font-medium text-gray-700">
+                                নোট (ঐচ্ছিক)
+                            </label>
+                            <textarea
+                                id="notes"
+                                rows={2}
+                                className="shadow-sm focus:ring-red-500 focus:border-red-500 mt-1 block w-full sm:text-sm border-gray-300 rounded-md"
+                                value={data.notes}
+                                onChange={(e) => setData('notes', e.target.value)}
+                            />
+                            {errors.notes && (
+                                <p className="mt-1 text-sm text-red-600">{errors.notes}</p>
+                            )}
+                        </div>
+
+                        {/* Search and Member Selection */}
+                        <div className="mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                            <div className="w-full sm:w-auto">
+                                <div className="relative rounded-md shadow-sm">
+                                    <div className="absolute inset-y-0 left-0 pr-10 flex items-center pointer-events-none">
+                                        <SearchIcon className="h-4 w-4 text-gray-400" />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        className="focus:ring-red-500 focus:border-red-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md"
+                                        placeholder="নাম বা ফোন দিয়ে খুঁজুন"
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex items-center">
+                                <input
+                                    id="select-all"
+                                    name="select-all"
+                                    type="checkbox"
+                                    className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
+                                    checked={selectAll}
+                                    onChange={handleSelectAll}
+                                />
+                                <label htmlFor="select-all" className="ml-2 block text-sm text-gray-900">
+                                    সব সদস্য নির্বাচন করুন
+                                </label>
+                            </div>
+                        </div>
+
+                        {/* Members List */}
+                        <div className="overflow-x-auto border border-gray-200 rounded-lg mb-6">
+                            <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            নির্বাচন
+                                        </th>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            সদস্য
+                                        </th>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            প্রত্যাশিত পরিমাণ
+                                        </th>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            পরিশোধিত পরিমাণ
+                                        </th>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            বাকি পরিমাণ
+                                        </th>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            পেমেন্ট পরিমাণ
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                    {filteredMembers.length > 0 ? (
+                                        filteredMembers.map((member) => {
+                                            const isSelected = selectedMembers.includes(member.id);
+                                            const payment = data.payments.find((p) => p.member_id === member.id);
+
+                                            return (
+                                                <tr
+                                                    key={member.id}
+                                                    className={isSelected ? "bg-red-50" : "hover:bg-gray-50"}
+                                                >
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                        <input
+                                                            type="checkbox"
+                                                            className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
+                                                            checked={isSelected}
+                                                            onChange={() => handleSelectMember(member.id)}
+                                                        />
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                        <div className="flex items-center">
+                                                            <div>
+                                                                <div className="text-sm font-medium text-gray-900">{member.name}</div>
+                                                                <div className="text-sm text-gray-500">{member.phone}</div>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                        ৳{member.expected_amount.toLocaleString()}
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                        ৳{member.paid_amount.toLocaleString()}
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                                            ৳{member.due_amount.toLocaleString()}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                        <input
+                                                            type="number"
+                                                            className={`w-24 border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm ${isSelected ? "" : "bg-gray-100"
+                                                                }`}
+                                                            value={payment?.amount || 0}
+                                                            onChange={(e) => handleAmountChange(member.id, e.target.value)}
+                                                            disabled={!isSelected}
+                                                            min="0"
+                                                            step="any"
+                                                        />
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
+                                    ) : (
+                                        <tr>
+                                            <td colSpan={6} className="px-6 py-4 text-center text-sm text-gray-500">
+                                                কোন সদস্য পাওয়া যায়নি
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Payment Summary */}
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <h3 className="text-lg font-medium text-gray-900">পেমেন্ট সারসংক্ষেপ</h3>
+                                    <p className="text-sm text-gray-500">
+                                        {selectedMembers.length} জন সদস্য নির্বাচিত
+                                    </p>
+                                </div>
+                                <div className="text-right">
+                                    <div className="text-lg font-medium text-gray-900">
+                                        মোট পরিমাণ: <span className="text-red-600 font-bold">৳{totalToPay.toLocaleString()}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Form Errors */}
+                        {errors.payments && (
+                            <div className="rounded-md bg-red-50 p-4 mb-6">
+                                <div className="flex">
+                                    <div className="flex-shrink-0">
+                                        <XCircleIcon className="h-5 w-5 text-red-400" aria-hidden="true" />
+                                    </div>
+                                    <div className="ml-3">
+                                        <h3 className="text-sm font-medium text-red-800">
+                                            {errors.payments}
+                                        </h3>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Submit Button */}
+                        <div className="flex justify-end">
+                            <button
+                                type="submit"
+                                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-700 hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
+                                disabled={processing || selectedMembers.length === 0 || totalToPay <= 0}
+                            >
+                                {processing ? (
+                                    <>
+                                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        প্রসেসিং...
+                                    </>
+                                ) : (
+                                    <>
+                                        <CreditCardIcon className="-ml-1 mr-2 h-5 w-5" aria-hidden="true" />
+                                        পেমেন্ট প্রসেস করুন
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </OrganizationLayout>
+    );
 };
 
-export default SomitiPayments;
+export default SomitiPaymentForm;

@@ -11,6 +11,8 @@ interface SomitiShowProps {
     totalDue: number;
     totalPaid: number;
     totalAmount: number;
+    totalExpected: number;
+    overpaid: number;
     nextCollectionDate: string | null;
     nextCollectionDay: string | null;
     totalCollections: number;
@@ -22,9 +24,11 @@ const SomitiShow: React.FC<SomitiShowProps> = ({
     totalDue,
     totalPaid,
     totalAmount,
+    overpaid,
     nextCollectionDate,
     nextCollectionDay,
     totalCollections,
+    totalExpected,
 }) => {
     // Format date function
     const formatDate = (dateString: string | null) => {
@@ -90,7 +94,7 @@ const SomitiShow: React.FC<SomitiShowProps> = ({
                             সম্পাদনা করুন
                         </Link>
                         <Link
-                            href={`/organization/somitis/${somiti.id}/process-collection`}
+                            href={`/organization/somiti/${somiti.id}/payment`}
                             className="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-700 active:bg-green-800 focus:outline-none focus:border-green-800 focus:ring ring-green-300 disabled:opacity-25 transition ease-in-out duration-150"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -190,39 +194,34 @@ const SomitiShow: React.FC<SomitiShowProps> = ({
                                 <div className="border-t border-gray-200 pt-3">
                                     <div className="flex justify-between text-lg font-semibold">
                                         <span className="text-gray-600">মোট হিসাব:</span>
-                                        <span className="text-blue-600">{formatCurrency(totalAmount)}</span>
+                                        <span className="text-blue-600">{formatCurrency(totalExpected)}</span>
                                     </div>
                                     <div className="flex justify-between">
                                         <span className="text-gray-600">মোট আদায়:</span>
                                         <span className="text-green-600">{formatCurrency(totalPaid)}</span>
                                     </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-gray-600">মোট বকেয়া:</span>
-                                        <span className="text-red-600">{formatCurrency(totalDue)}</span>
-                                    </div>
-
-                                    {/* Add a visual representation */}
-                                    <div className="mt-3 bg-gray-100 rounded-lg p-3">
-                                        <div className="flex">
-                                            <div
-                                                className="bg-green-500 text-xs text-white py-1 text-center"
-                                                style={{ width: `${totalAmount > 0 ? (totalPaid / totalAmount) * 100 : 0}%` }}
-                                            >
-                                                আদায়
+                                    {overpaid > 0 ? (
+                                        <>
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-600">অতিরিক্ত আদায়:</span>
+                                                <span className="text-purple-600">{formatCurrency(overpaid)}</span>
                                             </div>
-                                            <div
-                                                className="bg-red-500 text-xs text-white py-1 text-center"
-                                                style={{ width: `${totalAmount > 0 ? (totalDue / totalAmount) * 100 : 0}%` }}
-                                            >
-                                                বকেয়া
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-600">বকেয়া:</span>
+                                                <span className="text-gray-600">০.০০৳</span>
                                             </div>
+                                        </>
+                                    ) : (
+                                        <div className="flex justify-between">
+                                            <span className="text-gray-600">বকেয়া:</span>
+                                            <span className="text-red-600">{formatCurrency(totalDue)}</span>
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
                             </div>
                             <div className="mt-6">
                                 <Link
-                                    href={`/organization/somitis/${somiti.id}/payments`}
+                                    href={`/organization/payments`}
                                     className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 w-full justify-center"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">

@@ -68,6 +68,7 @@
   color utility to any element that depends on these defaults.
 */
 @layer base {
+
     *,
     ::after,
     ::before,
@@ -148,6 +149,29 @@
     --sidebar-ring: oklch(0.439 0 0);
 }
 
+label {
+    @apply block text-sm font-medium text-red-700;
+}
+
+/* Input styling */
+input {
+    @apply w-full px-4 py-2 border border-red-300 rounded-md shadow-sm text-red-800 placeholder-red-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500;
+}
+
+/* Select styling */
+select {
+    @apply w-full px-4 py-2 border border-red-300 rounded-md shadow-sm text-red-800 bg-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500;
+}
+
+input[type='checkbox'] {
+    @apply h-4 w-4 text-red-600 border-red-300 rounded focus:ring-2 focus:ring-red-500;
+}
+
+/* Label styling remains same */
+label {
+    @apply text-sm font-medium text-red-700;
+}
+
 @layer base {
     * {
         @apply border-border;
@@ -155,5 +179,9 @@
 
     body {
         @apply bg-background text-foreground;
+    }
+
+    input {
+        padding: 10px, 5px;
     }
 }

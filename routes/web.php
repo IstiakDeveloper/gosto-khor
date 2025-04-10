@@ -117,6 +117,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/somitis/{somiti}/process-collection', [SomitiController::class, 'processCollection'])->name('somitis.process-collection');
         Route::post('/somitis/{somiti}/save-collection', [SomitiController::class, 'saveCollection'])->name('somitis.save-collection');
 
+        Route::get('/somiti/{somitiId}/payment', [SomitiController::class, 'showPaymentForm'])->name('somiti.payment.form');
+        Route::post('/somiti/process-payments', [SomitiController::class, 'processPayments'])->name('somiti.process.payments');
+
         // Payment status management
         Route::post('/payments/{payment}/status', [SomitiController::class, 'updatePaymentStatus'])->name('payments.update-status');
 

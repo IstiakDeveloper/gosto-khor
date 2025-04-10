@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Member;
 use App\Models\Payment;
 use App\Models\Somiti;
+use App\Models\SomitiMember;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -21,14 +22,38 @@ class SomitiController extends Controller
      * @param  \Illuminate\Http\Request  $request
      * @return \Inertia\Response
      */
+
+    /**
+     * Display a listing of the somitis or redirect appropriately based on subscription plan.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Inertia\Response|\Illuminate\Http\RedirectResponse
+     */
     public function index(Request $request)
     {
-        // Check if automatic processing should be run
-        $this->processAllDueCollections();
-
-
         $organization = auth()->user()->organization;
 
+        // Get the active subscription plan
+        $subscriptionPlan = $organization->activeSubscription->plan ?? null;
+
+        // Default to 1 if no plan is found or if plan doesn't specify
+        $maxSomitis = $subscriptionPlan ? $subscriptionPlan->max_somitis : 1;
+
+        // If the plan only allows one somiti
+        if ($maxSomitis === 1) {
+            // Check if there's already a somiti
+            $somiti = Somiti::where('organization_id', $organization->id)->first();
+
+            if (!$somiti) {
+                // No somiti exists, redirect to create
+                return redirect()->route('organization.somitis.create');
+            } else {
+                // One somiti exists, redirect to show
+                return redirect()->route('organization.somitis.show', $somiti->id);
+            }
+        }
+
+        // If we get here, the plan allows multiple somitis, so show the index page
         $query = Somiti::where('organization_id', $organization->id);
 
         // Search
@@ -65,40 +90,7 @@ class SomitiController extends Controller
         ]);
     }
 
-    /**
-     * Add a scheduled task to run daily and process all due collections
-     * This would be in a separate command class
-     */
-    public function processAllDueCollections()
-    {
 
-        // Get all active somitis
-        $somitis = Somiti::where('is_active', true)->get();
-
-        $today = Carbon::now();
-
-        foreach ($somitis as $somiti) {
-            // Check if today is a collection day for this somiti
-            $isCollectionDay = false;
-
-            if ($somiti->type === 'daily') {
-                $isCollectionDay = true;
-            } elseif ($somiti->type === 'weekly' && $somiti->collection_day !== null) {
-                $isCollectionDay = ($today->dayOfWeek == $somiti->collection_day);
-            } elseif ($somiti->type === 'monthly' && $somiti->collection_day !== null) {
-                $isCollectionDay = ($today->day == $somiti->collection_day);
-            }
-
-            // If it's a collection day, add due to all active members
-            if ($isCollectionDay) {
-                $this->addDueToActiveMembers($somiti, $today->format('Y-m-d'));
-
-                // Create a system notification or log for the admin
-                // You could implement a notification system for this
-                Log::info("Automatic dues added for somiti: {$somiti->name} on {$today->format('Y-m-d')}");
-            }
-        }
-    }
     /**
      * Show the form for creating a new somiti.
      *
@@ -194,29 +186,34 @@ class SomitiController extends Controller
         // Count active members
         $activeMembers = $somiti->members()->wherePivot('is_active', true)->count();
 
-        // Get next collection date
-        $nextCollectionDate = $this->getNextCollectionDate($somiti);
-
         // Get collection history
         $collectionDates = $this->getPastCollectionDates($somiti);
         $totalCollections = count($collectionDates);
 
-        // Calculate the CORRECT total expected amount
-        $totalExpected = $somiti->amount * $activeMembers * max(1, $totalCollections);
+        // Calculate what the expected total is based on collections and members
+        $totalExpected = $somiti->amount * $totalCollections * $activeMembers;
 
-        // The correct total is what was expected to be collected
-        // NOT due + paid (which double counts)
-        $totalAmount = $totalExpected;
+        // Ensure we account for added/removed members over time in a real project
+        // This is simplified for the example
+
+        // Get next collection date
+        $nextCollectionDate = $this->getNextCollectionDate($somiti);
+
+        // Adjust to handle case where paid exceeds expected
+        $netDue = max(0, $totalExpected - $totalPaid);
+        $overpaid = $totalPaid > $totalExpected ? $totalPaid - $totalExpected : 0;
 
         return Inertia::render('organization/somitis/show', [
             'somiti' => $somiti,
             'latestPayments' => $latestPayments,
             'totalDue' => $totalDue,
             'totalPaid' => $totalPaid,
-            'totalAmount' => $totalAmount,
+            'totalExpected' => $totalExpected,
+            'overpaid' => $overpaid,
             'nextCollectionDate' => $nextCollectionDate ? $nextCollectionDate->format('Y-m-d') : null,
             'nextCollectionDay' => $nextCollectionDate ? $nextCollectionDate->format('l') : null,
             'totalCollections' => $totalCollections,
+            'activeMembers' => $activeMembers,
         ]);
     }
 
@@ -486,55 +483,7 @@ class SomitiController extends Controller
         return back()->with('success', 'Member status updated successfully.');
     }
 
-    /**
-     * Show payments for the specified somiti.
-     *
-     * @param  \App\Models\Somiti  $somiti
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Inertia\Response
-     */
-    public function payments(Somiti $somiti, Request $request)
-    {
-        $this->checkSomitiAccess($somiti);
 
-        $query = Payment::where('somiti_id', $somiti->id)->with('member');
-
-        // Search
-        if ($request->has('search')) {
-            $searchTerm = $request->input('search');
-            $query->whereHas('member', function ($q) use ($searchTerm) {
-                $q->where('name', 'like', "%{$searchTerm}%")
-                    ->orWhere('phone', 'like', "%{$searchTerm}%");
-            });
-        }
-
-        // Filter by date range
-        if ($request->has('date_from') && $request->input('date_from')) {
-            $query->where('payment_date', '>=', $request->input('date_from'));
-        }
-
-        if ($request->has('date_to') && $request->input('date_to')) {
-            $query->where('payment_date', '<=', $request->input('date_to'));
-        }
-
-        // Filter by status
-        if ($request->has('status') && $request->input('status')) {
-            $query->where('status', $request->input('status'));
-        }
-
-        // Sort
-        $sortField = $request->input('sort_field', 'payment_date');
-        $sortDirection = $request->input('sort_direction', 'desc');
-        $query->orderBy($sortField, $sortDirection);
-
-        $payments = $query->paginate(10)->withQueryString();
-
-        return Inertia::render('organization/somitis/payments', [
-            'somiti' => $somiti,
-            'payments' => $payments,
-            'filters' => $request->only(['search', 'date_from', 'date_to', 'status', 'sort_field', 'sort_direction']),
-        ]);
-    }
 
     /**
      * Process collection for the specified somiti.
@@ -628,7 +577,6 @@ class SomitiController extends Controller
 
                 if ($somitiMember) {
                     // If paid, reduce the due amount by the payment
-                    // If pending, due was already added by addDueToActiveMembers
                     if ($status === 'paid') {
                         DB::table('somiti_members')
                             ->where('somiti_id', $somiti->id)
@@ -637,6 +585,7 @@ class SomitiController extends Controller
                                 'due_amount' => max(0, $somitiMember->due_amount - $amount),
                             ]);
                     }
+                    // For pending, the due has already been added by addDueToActiveMembers
                 }
             }
 
@@ -691,7 +640,6 @@ class SomitiController extends Controller
                 elseif ($oldStatus === 'paid' && $newStatus === 'failed') {
                     $dueAmount = $dueAmount + $payment->amount;
                 }
-                // If changing to failed from pending, no change in due (already counted)
 
                 // Update due amount
                 DB::table('somiti_members')
@@ -786,13 +734,24 @@ class SomitiController extends Controller
      */
     private function addDueToActiveMembers($somiti, $collectionDate)
     {
+        // Check if this collection date already has dues added
+        $alreadyProcessed = DB::table('collection_logs')
+            ->where('somiti_id', $somiti->id)
+            ->where('collection_date', $collectionDate)
+            ->exists();
+
+        // Do not add dues if already processed for this date
+        if ($alreadyProcessed) {
+            return;
+        }
+
         // Get all active members
         $activeMembers = $somiti->members()
             ->wherePivot('is_active', true)
             ->withPivot('due_amount')
             ->get();
 
-        // Begin transaction to ensure all updates are atomic
+        // Begin transaction
         DB::beginTransaction();
 
         try {
@@ -806,13 +765,10 @@ class SomitiController extends Controller
                     ]);
             }
 
-            // If we want to log this collection
+            // Record this collection for future reference
             DB::table('collection_logs')->insert([
                 'somiti_id' => $somiti->id,
                 'collection_date' => $collectionDate,
-                'amount' => $somiti->amount,
-                'active_members' => $activeMembers->count(),
-                'total_expected' => $somiti->amount * $activeMembers->count(),
                 'processed_at' => now(),
             ]);
 
@@ -1061,6 +1017,287 @@ class SomitiController extends Controller
             'currentYear' => (int) $year,
             'currentMonth' => (int) $month,
             'monthName' => Carbon::createFromDate($year, $month, 1)->format('F Y'),
+        ]);
+    }
+
+
+
+
+    /**
+     * Calculate due amounts for all members of a somiti
+     *
+     * @param int $somitiId
+     * @return array
+     */
+    private function calculateSomitiDues($somitiId)
+    {
+        // Get somiti details with its members
+        $somiti = Somiti::with('members')->findOrFail($somitiId);
+
+        // If somiti doesn't have a start date, return empty result
+        if (!$somiti->start_date) {
+            return [
+                'somiti' => $somiti,
+                'total_due' => 0,
+                'members_due' => []
+            ];
+        }
+
+        // Get current date
+        $currentDate = now()->startOfDay();
+        $startDate = Carbon::parse($somiti->start_date)->startOfDay();
+
+        // If start date is in the future, no dues yet
+        if ($startDate->gt($currentDate)) {
+            return [
+                'somiti' => $somiti,
+                'total_due' => 0,
+                'members_due' => []
+            ];
+        }
+
+        // Calculate number of payment periods based on type
+        $numberOfPeriods = 0;
+
+        switch ($somiti->type) {
+            case 'daily':
+                $numberOfPeriods = $startDate->diffInDays($currentDate);
+                break;
+
+            case 'weekly':
+                // Calculate number of weeks with the specific collection day
+                $collectionDay = $somiti->collection_day; // 0 (Sunday) to 6 (Saturday)
+
+                $tempDate = clone $startDate;
+                // Move to the first collection day if start date is not on a collection day
+                if ($tempDate->dayOfWeek != $collectionDay) {
+                    $daysToAdd = ($collectionDay - $tempDate->dayOfWeek + 7) % 7;
+                    $tempDate->addDays($daysToAdd);
+                }
+
+                // Count collection days
+                $numberOfPeriods = 0;
+                while ($tempDate->lte($currentDate)) {
+                    $numberOfPeriods++;
+                    $tempDate->addWeek();
+                }
+                break;
+
+            case 'monthly':
+                $collectionDay = $somiti->collection_day;
+
+                $tempDate = clone $startDate;
+                // Move to the first collection day if start date is not on collection day
+                if ($tempDate->day != $collectionDay) {
+                    // If collection day has already passed in the start month, move to next month
+                    if ($tempDate->day > $collectionDay) {
+                        $tempDate->addMonth();
+                    }
+                    $tempDate->day = min($collectionDay, $tempDate->daysInMonth);
+                }
+
+                // Count collection days
+                $numberOfPeriods = 0;
+                while ($tempDate->lte($currentDate)) {
+                    $numberOfPeriods++;
+                    $tempDate->addMonth();
+                    // Handle months with fewer days
+                    $tempDate->day = min($collectionDay, $tempDate->daysInMonth);
+                }
+                break;
+        }
+
+        // Calculate expected amount per member
+        $expectedAmount = $somiti->amount * $numberOfPeriods;
+
+        // Calculate dues for each member
+        $membersDue = [];
+        $totalDue = 0;
+
+        // Get the somiti members through the pivot table
+        $somitiMembers = SomitiMember::where('somiti_id', $somiti->id)
+            ->with('member')
+            ->get();
+
+        foreach ($somitiMembers as $somitiMember) {
+            // Get total payments made by the member
+            $totalPaid = Payment::where('somiti_id', $somiti->id)
+                ->where('member_id', $somitiMember->member_id)
+                ->where('status', 'paid')
+                ->sum('amount');
+
+            // Calculate due amount
+            $dueAmount = $expectedAmount - $totalPaid;
+
+            // Update member's due in the database
+            $somitiMember->due_amount = $dueAmount;
+            $somitiMember->save();
+
+            // Add to the array for returning
+            $membersDue[] = [
+                'member' => $somitiMember->member,
+                'expected_amount' => $expectedAmount,
+                'paid_amount' => $totalPaid,
+                'due_amount' => $dueAmount
+            ];
+
+            $totalDue += $dueAmount;
+        }
+
+        return [
+            'somiti' => $somiti,
+            'total_periods' => $numberOfPeriods,
+            'expected_amount' => $expectedAmount,
+            'total_due' => $totalDue,
+            'members_due' => $membersDue
+        ];
+    }
+
+    /**
+     * Handle payments for somiti members
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\RedirectResponse
+     */
+    public function processPayments(Request $request)
+    {
+        // Validate the request
+        $validated = $request->validate([
+            'somiti_id' => 'required|exists:somitis,id',
+            'payment_date' => 'required|date',
+            'payment_method' => 'required|string',
+            'transaction_id' => 'nullable|string',
+            'notes' => 'nullable|string',
+            'payments' => 'required|array',
+            'payments.*.member_id' => 'required|exists:members,id',
+            'payments.*.amount' => 'required|numeric|min:0',
+            'payments.*.collection_date' => 'required|date',
+        ]);
+
+        // Get the somiti
+        $somiti = Somiti::findOrFail($validated['somiti_id']);
+
+        // Check if user has permission to this somiti (organization check)
+        if ($somiti->organization_id !== auth()->user()->organization_id) {
+            return redirect()->back()->with('error', 'You do not have permission to process payments for this somiti.');
+        }
+
+        // Begin transaction
+        DB::beginTransaction();
+
+        try {
+            $createdPayments = [];
+            $totalProcessed = 0;
+
+            // Process each payment
+            foreach ($validated['payments'] as $paymentData) {
+                // Skip zero amount payments
+                if ($paymentData['amount'] <= 0) {
+                    continue;
+                }
+
+                // Create the payment record
+                $payment = new Payment([
+                    'somiti_id' => $somiti->id,
+                    'member_id' => $paymentData['member_id'],
+                    'amount' => $paymentData['amount'],
+                    'payment_date' => $validated['payment_date'],
+                    'collection_date' => $paymentData['collection_date'],
+                    'payment_method' => $validated['payment_method'],
+                    'transaction_id' => $validated['transaction_id'] ?? null,
+                    'notes' => $validated['notes'] ?? null,
+                    'status' => 'paid',
+                    'created_by' => auth()->id(),
+                ]);
+
+                $payment->save();
+                $createdPayments[] = $payment;
+                $totalProcessed += $paymentData['amount'];
+
+                // Update member's due amount in SomitiMember
+                $somitiMember = SomitiMember::where('somiti_id', $somiti->id)
+                    ->where('member_id', $paymentData['member_id'])
+                    ->first();
+
+                if ($somitiMember) {
+                    $somitiMember->due_amount = max(0, $somitiMember->due_amount - $paymentData['amount']);
+                    $somitiMember->save();
+                }
+            }
+
+            // If we got here, everything went well, commit the transaction
+            DB::commit();
+
+            // Recalculate all dues to ensure consistency
+            $this->calculateSomitiDues($somiti->id);
+
+            return redirect()->route('organization.somitis.show', $somiti->id)
+                ->with('success', 'Successfully processed ' . count($createdPayments) . ' payments totaling ' . $totalProcessed . ' ' . config('app.currency', 'BDT') . '.');
+        } catch (\Exception $e) {
+            // Something went wrong, rollback the transaction
+            DB::rollBack();
+
+            return redirect()->back()
+                ->with('error', 'Failed to process payments. Error: ' . $e->getMessage())
+                ->withInput();
+        }
+    }
+
+    /**
+     * Show payment form for specific somiti
+     *
+     * @param int $somitiId
+     * @return \Inertia\Response
+     */
+    public function showPaymentForm($somitiId)
+    {
+        $somiti = Somiti::with([
+            'members' => function ($query) {
+                $query->where('somiti_members.is_active', true);
+            }
+        ])->findOrFail($somitiId);
+
+        // Check if user has permission to this somiti (organization check)
+        if ($somiti->organization_id !== auth()->user()->organization_id) {
+            return redirect()->route('dashboard')->with('error', 'You do not have permission to access this somiti.');
+        }
+
+        // Get the due data for each member
+        $duesData = $this->calculateSomitiDues($somitiId);
+
+        // Format the data for the frontend
+        $membersWithDues = collect($duesData['members_due'])->map(function ($memberDue) {
+            return [
+                'id' => $memberDue['member']->id,
+                'name' => $memberDue['member']->name,
+                'phone' => $memberDue['member']->phone,
+                'due_amount' => $memberDue['due_amount'],
+                'expected_amount' => $memberDue['expected_amount'],
+                'paid_amount' => $memberDue['paid_amount'],
+            ];
+        });
+
+        // Get payment methods (you can customize this based on your needs)
+        $paymentMethods = [
+            'cash' => 'Cash',
+            'bank_transfer' => 'Bank Transfer',
+            'mobile_banking' => 'Mobile Banking',
+            'check' => 'Check',
+            'other' => 'Other'
+        ];
+
+        return Inertia::render('organization/somitis/payments', [
+            'somiti' => [
+                'id' => $somiti->id,
+                'name' => $somiti->name,
+                'type' => $somiti->type,
+                'amount' => $somiti->amount,
+                'collection_day' => $somiti->collection_day,
+            ],
+            'members' => $membersWithDues,
+            'paymentMethods' => $paymentMethods,
+            'totalDue' => $duesData['total_due'],
+            'nextCollectionDate' => $this->getNextCollectionDate($somiti)->format('Y-m-d'),
         ]);
     }
 }
