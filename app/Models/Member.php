@@ -55,6 +55,10 @@ class Member extends Model
         return $this->hasMany(Payment::class);
     }
 
+    public function somitiMembers()
+    {
+        return $this->hasMany(SomitiMember::class);
+    }
     /**
      * Scope a query to only include active members.
      *

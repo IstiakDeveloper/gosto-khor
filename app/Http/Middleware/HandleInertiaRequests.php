@@ -2,8 +2,10 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Organization;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Inertia\Middleware;
 use Tighten\Ziggy\Ziggy;
 
@@ -39,6 +41,12 @@ class HandleInertiaRequests extends Middleware
     {
         [$message, $author] = str(Inspiring::quotes()->random())->explode('-');
 
+        $domain = $request->segment(1);
+        $organization = null;
+
+        if ($domain) {
+            $organization = Organization::where('domain', $domain)->first();
+        }
         return [
             ...parent::share($request),
             'name' => config('app.name'),
@@ -55,6 +63,13 @@ class HandleInertiaRequests extends Middleware
                 'error' => fn() => $request->session()->get('error'),
             ],
             'sidebarOpen' => $request->cookie('sidebar_state') === 'true',
+
+            'organization' => $organization ? [
+                'id' => $organization->id,
+                'name' => $organization->name,
+                'domain' => $organization->domain,
+            ] : null,
+            'organization' => fn () => Auth::check() ? Auth::user()->organization : null,
         ];
     }
 }

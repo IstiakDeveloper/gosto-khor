@@ -48,6 +48,10 @@ class Somiti extends Model
             ->withTimestamps();
     }
 
+    public function somitiMembers()
+    {
+        return $this->hasMany(SomitiMember::class);
+    }
     /**
      * Get the payments for the somiti.
      */

@@ -173,9 +173,9 @@ const Landing: React.FC<LandingProps> = ({ plans }) => {
               <div>
                 <h4 className="text-lg font-semibold mb-4">যোগাযোগ</h4>
                 <ul className="space-y-2">
-                  <li className="text-gray-300">info@gostoKhor.com</li>
-                  <li className="text-gray-300">+880 123 456 7890</li>
-                  <li className="text-gray-300">ঢাকা, বাংলাদেশ</li>
+                  <li className="text-gray-300">desginfic.com@gmail.com</li>
+                  <li className="text-gray-300">+880 1717 893432</li>
+                  <li className="text-gray-300">জয়পুরহাট, বাংলাদেশ</li>
                 </ul>
               </div>
             </div>

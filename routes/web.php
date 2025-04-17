@@ -19,6 +19,8 @@ use App\Http\Controllers\Organization\PaymentController;
 use App\Http\Controllers\Organization\ProfileController;
 use App\Http\Controllers\Organization\ReportController;
 use App\Http\Controllers\Organization\SomitiController;
+use App\Http\Controllers\OrganizationDomainController;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -31,6 +33,20 @@ use Illuminate\Support\Facades\Route;
 | be assigned to the "web" middleware group. Make something great!
 |
 */
+
+
+Route::get('/storage-link', function () {
+    Artisan::call('storage:link');
+
+    return response()->json(['message' => 'Storage link created successfully.']);
+})->name('storage.link');
+
+// Route for running migrations
+Route::get('/migrate', function () {
+    Artisan::call('migrate');
+
+    return response()->json(['message' => 'Migrations run successfully.']);
+})->name('migrate');
 
 // Domain Resolver
 Route::domain('{domain}.' . config('app.domain'))->group(function () {
@@ -162,4 +178,14 @@ Route::middleware('auth')->group(function () {
         Route::get('/profile/team/create', [ProfileController::class, 'createTeamMember'])->name('profile.team.create');
         Route::post('/profile/team', [ProfileController::class, 'storeTeamMember'])->name('profile.team.store');
     });
+
+
+
 });
+
+
+Route::get('{domain}', [OrganizationDomainController::class, 'show'])
+    ->where('domain', '[a-zA-Z0-9\-]+');
+
+Route::get('{domain}/members/{member}/payments', [OrganizationDomainController::class, 'memberPayments'])
+    ->where('domain', '[a-zA-Z0-9\-]+');
