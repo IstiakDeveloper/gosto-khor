@@ -27,10 +27,10 @@ class MemberController extends Controller
         // Search
         if ($request->has('search')) {
             $searchTerm = $request->input('search');
-            $query->where(function($q) use ($searchTerm) {
+            $query->where(function ($q) use ($searchTerm) {
                 $q->where('name', 'like', "%{$searchTerm}%")
-                  ->orWhere('phone', 'like', "%{$searchTerm}%")
-                  ->orWhere('address', 'like', "%{$searchTerm}%");
+                    ->orWhere('phone', 'like', "%{$searchTerm}%")
+                    ->orWhere('address', 'like', "%{$searchTerm}%");
             });
         }
 
@@ -92,10 +92,22 @@ class MemberController extends Controller
             'photo' => 'nullable|image|max:2048',
         ]);
 
-        // Upload photo if provided
+        // Manual photo handling
+        $photoPath = null;
         if ($request->hasFile('photo')) {
-            $photoPath = $request->file('photo')->store('members/photos', 'public');
-            $validated['photo'] = $photoPath;
+            $photo = $request->file('photo');
+            $filename = time() . '_' . $photo->getClientOriginalName();
+            $destinationPath = public_path('storage/members/photos');
+
+            // Create directory if it doesn't exist
+            if (!file_exists($destinationPath)) {
+                mkdir($destinationPath, 0755, true);
+            }
+
+            // Move the file manually
+            if ($photo->move($destinationPath, $filename)) {
+                $photoPath = 'members/photos/' . $filename;
+            }
         }
 
         // Create member
@@ -105,7 +117,7 @@ class MemberController extends Controller
             'address' => $validated['address'] ?? null,
             'phone' => $validated['phone'],
             'email' => $validated['email'] ?? null,
-            'photo' => $validated['photo'] ?? null,
+            'photo' => $photoPath,
             'is_active' => true,
         ]);
 
@@ -123,9 +135,11 @@ class MemberController extends Controller
     {
         $this->checkMemberAccess($member);
 
-        $member->load(['somitis' => function ($query) {
-            $query->withPivot('due_amount', 'is_active');
-        }]);
+        $member->load([
+            'somitis' => function ($query) {
+                $query->withPivot('due_amount', 'is_active');
+            }
+        ]);
 
         // Get latest 5 payments
         $latestPayments = Payment::where('member_id', $member->id)
@@ -195,15 +209,26 @@ class MemberController extends Controller
             'is_active' => 'required|boolean',
         ]);
 
-        // Upload photo if provided
+        // Manual photo handling
         if ($request->hasFile('photo')) {
             // Delete old photo if exists
-            if ($member->photo) {
-                Storage::disk('public')->delete($member->photo);
+            if ($member->photo && file_exists(public_path('storage/' . $member->photo))) {
+                unlink(public_path('storage/' . $member->photo));
             }
 
-            $photoPath = $request->file('photo')->store('members/photos', 'public');
-            $validated['photo'] = $photoPath;
+            $photo = $request->file('photo');
+            $filename = time() . '_' . $photo->getClientOriginalName();
+            $destinationPath = public_path('storage/members/photos');
+
+            // Create directory if it doesn't exist
+            if (!file_exists($destinationPath)) {
+                mkdir($destinationPath, 0755, true);
+            }
+
+            // Move the file manually
+            if ($photo->move($destinationPath, $filename)) {
+                $validated['photo'] = 'members/photos/' . $filename;
+            }
         }
 
         $member->update($validated);
