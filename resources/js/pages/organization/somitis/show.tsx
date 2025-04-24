@@ -10,7 +10,7 @@ interface SomitiShowProps {
     latestPayments: Payment[];
     totalDue: number;
     totalPaid: number;
-    totalAmount: number;
+    // Removed totalAmount as it's unused
     totalExpected: number;
     overpaid: number;
     nextCollectionDate: string | null;
@@ -23,7 +23,7 @@ const SomitiShow: React.FC<SomitiShowProps> = ({
     latestPayments,
     totalDue,
     totalPaid,
-    totalAmount,
+    // Removed totalAmount from destructuring to match interface
     overpaid,
     nextCollectionDate,
     nextCollectionDay,
@@ -248,10 +248,11 @@ const SomitiShow: React.FC<SomitiShowProps> = ({
                                         <div key={payment.id} className="border-b border-gray-200 pb-3 last:border-0 last:pb-0">
                                             <div className="flex justify-between">
                                                 <span className="font-medium">{payment.member.name}</span>
-                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${payment.status === 'paid' ? 'bg-green-100 text-green-800' :
+                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                                    payment.status === 'paid' ? 'bg-green-100 text-green-800' :
                                                     payment.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                                                        'bg-red-100 text-red-800'
-                                                    }`}>
+                                                    'bg-red-100 text-red-800'
+                                                }`}>
                                                     {payment.status === 'paid' && 'পরিশোধিত'}
                                                     {payment.status === 'pending' && 'বকেয়া'}
                                                     {payment.status === 'failed' && 'ব্যর্থ'}
